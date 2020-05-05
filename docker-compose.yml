@@ -1,0 +1,79 @@
+version: '3.2'
+
+services:
+  elasticsearch:
+    build:
+      context: elasticsearch/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    volumes:
+      - type: volume
+        source: elasticsearch02
+        target: /usr/share/elasticsearch/data
+    ports:
+      - "9300:9300"
+      - "9200:9200"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      ELASTIC_PASSWORD: $ELK_PASSWORD
+      # Use single node discovery in order to disable production mode and avoid bootstrap checks
+      # see https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+      discovery.type: single-node
+    networks:
+      - elk
+
+  kibana:
+    build:
+      context: kibana/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    environment:
+      ELK_USERNAME: $ELK_USERNAME
+      ELK_PASSWORD: $ELK_PASSWORD
+    ports:
+      - "5601:5601"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  logstash:
+    build:
+      context: logstash/
+      args:
+        ELK_VERSION: $ELK_VERSION
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+      ELK_USERNAME: $ELK_USERNAME
+      ELK_PASSWORD: $ELK_PASSWORD
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  filebeat:
+    build:
+      context: filebeat/
+      args:
+          ELK_VERSION: $ELK_VERSION
+    environment:
+      ELK_USERNAME: $ELK_USERNAME
+      ELK_PASSWORD: $ELK_PASSWORD
+    command: filebeat -e -strict.perms=false
+    volumes:
+      - ./log:/usr/share/filebeat/logs
+    networks:
+      - elk
+    depends_on:
+      - kibana
+    restart: on-failure
+
+networks:
+  elk:
+    driver: bridge
+
+volumes:
+  elasticsearch02:
